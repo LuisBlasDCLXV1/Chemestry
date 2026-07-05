@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alquimia Real - Simulador de Química</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#070c0a;--bg2:#0c1410;--sidebar:#0e1913;--card:#15241c;
+  --accent:#00ff88;--accent2:#ff8c00;--text:#d0e8d6;--muted:#5a7a64;
+  --border:#1e3528;--danger:#e84060;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Source Sans 3',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;user-select:none;}
+#app{display:flex;flex-direction:column;height:100vh;}
+header{display:flex;align-items:center;gap:20px;padding:10px 24px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;z-index:10;}
+header h1{font-family:'Orbitron',sans-serif;font-size:22px;font-weight:900;letter-spacing:2px;color:var(--accent);text-shadow:0 0 20px rgba(0,255,136,.3);}
+header .sub{font-size:13px;color:var(--muted);font-weight:300;}
+.stats{margin-left:auto;display:flex;gap:18px;font-size:13px;color:var(--muted);}
+.stats span b{color:var(--accent);font-weight:700;}
+main{display:flex;flex:1;overflow:hidden;position:relative;}
+
+/* Espacio de trabajo */
+#workspace{flex:1;position:relative;overflow:hidden;
+  background:var(--bg2);
+  background-image:
+    radial-gradient(circle at 25% 45%,rgba(0,255,136,.04) 0%,transparent 50%),
+    radial-gradient(circle at 75% 30%,rgba(0,255,136,.02) 0%,transparent 50%),
+    linear-gradient(rgba(0,255,136,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,136,.025) 1px,transparent 1px);
+  background-size:100% 100%,100% 100%,32px 32px,32px 32px;
+}
+#ws-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);pointer-events:none;transition:opacity .3s;}
+#ws-hint i{font-size:48px;display:block;margin-bottom:12px;opacity:.4;}
+#ws-hint p{font-size:15px;opacity:.6;}
+#clear-btn{position:absolute;bottom:16px;left:16px;padding:8px 16px;background:rgba(232,64,96,.15);color:var(--danger);border:1px solid rgba(232,64,96,.3);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .2s;z-index:50;}
+#clear-btn:hover{background:rgba(232,64,96,.25);transform:translateY(-1px);}
+
+/* Elementos en la mesa */
+.ws-item{position:absolute;min-width:88px;padding:8px 12px;border-radius:10px;background:var(--card);border:1.5px solid var(--border);cursor:grab;z-index:10;transition:box-shadow .2s;text-align:center;}
+.ws-item:hover{box-shadow:0 0 18px rgba(0,255,136,.25);}
+.ws-item.dragging{z-index:100;opacity:.88;cursor:grabbing;transform:scale(1.06);}
+.ws-item .ws-sym{font-size:22px;font-weight:700;line-height:1.2;}
+.ws-item .ws-name{font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;}
+.ws-item.compound-item{border-color:rgba(0,255,136,.3);}
+.ws-item.compound-item .ws-sym{color:var(--accent);}
+.ws-item.reacting{animation:react-pulse .5s ease-out;}
+@keyframes react-pulse{0%{box-shadow:0 0 30px rgba(255,140,0,.8);transform:scale(1.15);}100%{box-shadow:none;transform:scale(1);}}
+.ws-item.new-item{animation:new-glow .5s ease-out;}
+@keyframes new-glow{0%{box-shadow:0 0 25px rgba(0,255,136,.7);transform:scale(1.1);}100%{box-shadow:none;transform:scale(1);}}
+
+/* Partículas */
+.particle{position:absolute;width:6px;height:6px;border-radius:50%;pointer-events:none;z-index:200;}
+.particle.animate{animation:pburst .7s ease-out forwards;}
+@keyframes pburst{0%{transform:translate(0,0) scale(1);opacity:1;}100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0;}}
+
+/* Panel Lateral */
+aside{width:320px;background:var(--sidebar);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:20;}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.sidebar-tabs button{flex:1;padding:10px 6px;font-size:11px;font-weight:600;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit;}
+.sidebar-tabs button.active{color:var(--accent);border-bottom-color:var(--accent);}
+.sidebar-tabs button:hover{color:var(--text);}
+#family-filter{padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.fam-btn{padding:3px 8px;border-radius:12px;font-size:9px;font-weight:600;border:1px solid rgba(255,255,255,.1);cursor:pointer;transition:all .2s;font-family:inherit;color:var(--text);opacity:.7;}
+.fam-btn:hover{opacity:1;transform:translateY(-1px);}
+.fam-btn.active{opacity:1;box-shadow:0 0 8px rgba(0,255,136,.3);}
+
+/* Inventario de Elementos */
+#elem-grid{flex:1;overflow-y:auto;padding:8px;display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;}
+#elem-grid::-webkit-scrollbar{width:5px;}
+#elem-grid::-webkit-scrollbar-track{background:var(--bg2);}
+#elem-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+.elemento-quimico{width:58px;height:64px;border-radius:6px;border-left:3px solid var(--fc,#888);background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;transition:all .15s;position:relative;overflow:hidden;}
+.elemento-quimico:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.4);}
+.elemento-quimico .numero{font-size:8px;color:var(--muted);position:absolute;top:2px;right:4px;}
+.elemento-quimico .simbolo{font-size:17px;font-weight:700;color:var(--text);line-height:1;}
+.elemento-quimico .nombre{font-size:6px;color:var(--muted);margin-top:2px;text-align:center;line-height:1.1;max-width:50px;overflow:hidden;}
+
+/* Descubrimientos */
+#disc-panel{flex:1;overflow-y:auto;padding:8px;display:none;flex-wrap:wrap;gap:6px;align-content:flex-start;}
+#disc-panel::-webkit-scrollbar{width:5px;}
+#disc-panel::-webkit-scrollbar-track{background:var(--bg2);}
+#disc-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.disc-card{width:90px;padding:8px 6px;border-radius:8px;background:var(--card);border:1px solid rgba(0,255,136,.2);cursor:grab;text-align:center;transition:all .15s;draggable:true;}
+.disc-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,255,136,.15);}
+.disc-card .dc-form{font-size:13px;font-weight:700;color:var(--accent);}
+.disc-card .dc-name{font-size:8px;color:var(--muted);margin-top:2px;line-height:1.2;}
+.disc-empty{width:100%;text-align:center;color:var(--muted);padding:40px 10px;font-size:13px;}
+
+/* Notificaciones */
+#toast-container{position:fixed;top:16px;right:340px;z-index:900;display:flex;flex-direction:column;gap:10px;pointer-events:none;}
+.toast{background:linear-gradient(135deg,#162420,#1a3028);border:1px solid var(--accent);border-radius:14px;padding:16px 20px;min-width:290px;max-width:370px;animation:tin .4s ease-out;box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 20px rgba(0,255,136,.15);pointer-events:auto;}
+.toast.removing{animation:tout .3s ease-in forwards;}
+@keyframes tin{from{transform:translateY(-30px) scale(.95);opacity:0;}to{transform:translateY(0) scale(1);opacity:1;}}
+@keyframes tout{from{transform:translateY(0);opacity:1;}to{transform:translateY(-30px);opacity:0;}}
+.toast-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.toast-icon{width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:var(--bg);font-size:12px;font-weight:900;flex-shrink:0;}
+.toast-badge{font-size:9px;font-weight:600;padding:2px 8px;border-radius:10px;background:rgba(0,255,136,.15);color:var(--accent);}
+.toast-formula{font-size:20px;font-weight:700;color:var(--text);margin-bottom:2px;}
+.toast-formula sub{font-size:14px;}
+.toast-name{font-size:14px;font-weight:600;color:var(--accent);margin-bottom:6px;}
+.toast-fact{font-size:11px;color:var(--muted);line-height:1.4;font-style:italic;}
+.no-react-toast{border-color:var(--danger) !important;}
+.no-react-toast .toast-icon{background:var(--danger);}
+.no-react-toast .toast-badge{background:rgba(232,64,96,.15);color:var(--danger);}
+.no-react-toast .toast-name{color:var(--danger);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>ALQUIMIA REAL</h1>
+    <span class="sub">Simulador de Química</span>
+    <div class="stats">
+      <span><i class="fa-solid fa-atom"></i> Elementos: <b>118</b></span>
+      <span><i class="fa-solid fa-flask"></i> Descubiertos: <b id="disc-count">0</b></span>
+    </div>
+  </header>
+  <main>
+    <!-- Mesa de juego actualizada con ondragover y ondrop -->
+    <div id="workspace" ondragover="event.preventDefault()" ondrop="event.preventDefault()">
+      <div id="ws-hint"><i class="fa-solid fa-flask-vial"></i><p>Arrastra elementos desde el panel y combinalos</p></div>
+      <button id="clear-btn"><i class="fa-solid fa-trash-can"></i> Limpiar Mesa</button>
+    </div>
+    <aside>
+      <div class="sidebar-tabs">
+        <button class="active" data-tab="elements"><i class="fa-solid fa-table-cells"></i> Elementos</button>
+        <button data-tab="discovered"><i class="fa-solid fa-trophy"></i> Descubiertos</button>
+      </div>
+      <div id="family-filter"></div>
+      <div id="elem-grid"></div>
+      <div id="disc-panel"><div class="disc-empty"><i class="fa-solid fa-flask"></i><p>Aun no has descubierto compuestos</p></div></div>
+    </aside>
+  </main>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ============================================
+// DATOS DE LOS 118 ELEMENTOS
+// ============================================
+const ED=[
+'1|H|Hidrógeno|nonmetal|1,-1|0','2|He|Helio|noble|0|0','3|Li|Litio|alkali|1|0','4|Be|Berilio|alkaline|2|0',
+'5|B|Boro|metalloid|3|0','6|C|Carbono|nonmetal|4,-4|0','7|N|Nitrógeno|nonmetal|-3,3,5|0',
+'8|O|Oxígeno|nonmetal|-2|0','9|F|Flúor|halogen|-1|0','10|Ne|Neón|noble|0|0',
+'11|Na|Sodio|alkali|1|0','12|Mg|Magnesio|alkaline|2|0','13|Al|Aluminio|post-metal|3|0',
+'14|Si|Silicio|metalloid|4,-4|0','15|P|Fósforo|nonmetal|-3,3,5|0','16|S|Azufre|nonmetal|-2,4,6|0',
+'17|Cl|Cloro|halogen|-1,1,5,7|0','18|Ar|Argón|noble|0|0','19|K|Potasio|alkali|1|0',
+'20|Ca|Calcio|alkaline|2|0','21|Sc|Escandio|transition|3|1','22|Ti|Titanio|transition|4,3|1',
+'23|V|Vanadio|transition|5,4,3,2|1','24|Cr|Cromo|transition|3,6,2|1','25|Mn|Manganeso|transition|2,4,7|1',
+'26|Fe|Hierro|transition|3,2|1','27|Co|Cobalto|transition|2,3|1','28|Ni|Níquel|transition|2,3|1',
+'29|Cu|Cobre|transition|2,1|1','30|Zn|Zinc|transition|2|0','31|Ga|Galio|post-metal|3|0',
+'32|Ge|Germanio|metalloid|4|0','33|As|Arsénico|metalloid|-3,3|0','34|Se|Selenio|nonmetal|-2,4,6|0',
+'35|Br|Bromo|halogen|-1,1,5|0','36|Kr|Kriptón|noble|0|0','37|Rb|Rubidio|alkali|1|0',
+'38|Sr|Estroncio|alkaline|2|0','39|Y|Itrio|transition|3|1','40|Zr|Circonio|transition|4|1',
+'41|Nb|Niobio|transition|5,3|1','42|Mo|Molibdeno|transition|6,4|1','43|Tc|Tecnecio|transition|7,4|1',
+'44|Ru|Rutenio|transition|3,4|1','45|Rh|Rodio|transition|3|1','46|Pd|Paladio|transition|2,4|1',
+'47|Ag|Plata|transition|1|1','48|Cd|Cadmio|post-metal|2|0','49|In|Indio|post-metal|3|0',
+'50|Sn|Estaño|post-metal|2,4|1','51|Sb|Antimonio|metalloid|-3,3|0','52|Te|Telurio|metalloid|-2,4,6|0',
+'53|I|Yodo|halogen|-1,1,5,7|0','54|Xe|Xenón|noble|0|0','55|Cs|Cesio|alkali|1|0',
+'56|Ba|Bario|alkaline|2|0','57|La|Lantano|lanthanide|3|1','58|Ce|Cerio|lanthanide|3,4|1',
+'59|Pr|Praseodimio|lanthanide|3|1','60|Nd|Neodimio|lanthanide|3|1','61|Pm|Prometio|lanthanide|3|1',
+'62|Sm|Samario|lanthanide|3,2|1','63|Eu|Europio|lanthanide|3,2|1','64|Gd|Gadolinio|lanthanide|3|1',
+'65|Tb|Terbio|lanthanide|3,4|1','66|Dy|Disprosio|lanthanide|3|1','67|Ho|Holmio|lanthanide|3|1',
+'68|Er|Erbio|lanthanide|3|1','69|Tm|Tulio|lanthanide|3|1','70|Yb|Yterbio|lanthanide|3,2|1',
+'71|Lu|Lutecio|lanthanide|3|1','72|Hf|Hafnio|transition|4|1','73|Ta|Tantalio|transition|5|1',
+'74|W|Wolframio|transition|6|1','75|Re|Renio|transition|7,4|1','76|Os|Osmio|transition|4,3|1',
+'77|Ir|Iridio|transition|3,4|1','78|Pt|Platino|transition|2,4|1','79|Au|Oro|transition|1,3|1',
+'80|Hg|Mercurio|transition|2,1|1','81|Tl|Talio|post-metal|1,3|1','82|Pb|Plomo|post-metal|2,4|1',
+'83|Bi|Bismuto|post-metal|3|0','84|Po|Polonio|metalloid|2,4|1','85|At|Ástato|halogen|-1|0',
+'86|Rn|Radón|noble|0|0','87|Fr|Francio|alkali|1|0','88|Ra|Radio|alkaline|2|0',
+'89|Ac|Actinio|actinide|3|1','90|Th|Torio|actinide|4|1','91|Pa|Protactinio|actinide|5,4|1',
+'92|U|Uranio|actinide|6,5,4|1','93|Np|Neptunio|actinide|5,4,3|1','94|Pu|Plutonio|actinide|4,3,5|1',
+'95|Am|Americio|actinide|3,4,5|1','96|Cm|Curio|actinide|3,4|1','97|Bk|Berkelio|actinide|3,4|1',
+'98|Cf|Californio|actinide|3|1','99|Es|Einsteinio|actinide|3|1','100|Fm|Fermio|actinide|3|1',
+'101|Md|Mendelevio|actinide|3,2|1','102|No|Nobelio|actinide|2,3|1','103|Lr|Lawrencio|actinide|3|1',
+'104|Rf|Rutherfordio|transition|4|1','105|Db|Dubnio|transition|5|1','106|Sg|Seaborgio|transition|6|1',
+'107|Bh|Bohrio|transition|7|1','108|Hs|Hassio|transition|8|1','109|Mt|Meitnerio|transition|0|1',
+'110|Ds|Darmstadtio|transition|0|1','111|Rg|Roentgenio|transition|1|1','112|Cn|Copernicio|transition|2|1',
+'113|Nh|Nihonio|post-metal|3|1','114|Fl|Flerovio|post-metal|2|1','115|Mc|Moscovio|post-metal|3|1',
+'116|Lv|Livermorio|post-metal|2|1','117|Ts|Teneso|halogen|-1|0','118|Og|Oganesón|noble|0|0'
+];
+
+const elements = ED.map(s=>{const p=s.split('|');return{n:+p[0],sym:p[1],name:p[2],family:p[3],ox:p[4].split(',').map(Number),stock:+p[5]};});
+const elBySym={};elements.forEach(e=>{elBySym[e.sym]=e;});
+
+// ============================================
+// CONFIGURACIÓN Y CONSTANTES
+// ============================================
+const FAMILY_COLORS={noble:'#F4D35E',alkali:'#EE6352',alkaline:'#F0A030',transition:'#3EC1C8',lanthanide:'#5DB87E',actinide:'#7BAF6A','post-metal':'#8EBD44',metalloid:'#C4A830',nonmetal:'#2ECC71',halogen:'#E84060'};
+const FAMILY_NAMES={noble:'Gases Nobles',alkali:'Alcalinos',alkaline:'Alcalinotérreos',transition:'Transición',lanthanide:'Lantánidos',actinide:'Actínidos','post-metal':'Otros Metales',metalloid:'Metaloides',nonmetal:'No Metales',halogen:'Halógenos'};
+const FAMILY_ORDER=['alkali','alkaline','transition','lanthanide','actinide','post-metal','metalloid','nonmetal','halogen','noble'];
+
+const ANION_NAMES={F:'fluoruro',Cl:'cloruro',Br:'bromuro',I:'yoduro',O:'óxido',S:'sulfuro',N:'nitruro',P:'fosfuro',H:'hidruro',Se:'seleniuro',Te:'telururo',C:'carburo',At:'astaturo'};
+const ROMAN=['','I','II','III','IV','V','VI','VII','VIII'];
+const METAL_FAMILIES=new Set(['alkali','alkaline','transition','lanthanide','actinide','post-metal']);
+
+// ============================================
+// RECETAS PREDEFINIDAS
+// ============================================
+const RECIPES={
+  'H+H':{f:'H2',n:'Hidrógeno molecular',t:'alótropo',fact:'El hidrógeno es el elemento más abundante del universo, constituyendo aproximadamente el 75% de su materia.'},
+  'O+O':{f:'O2',n:'Oxígeno molecular',t:'alótropo',fact:'El oxígeno molecular es esencial para la respiración aeróbica y forma el 21% de nuestra atmósfera.'},
+  'O+O2':{f:'O3',n:'Ozono',t:'alótropo',fact:'La capa de ozono nos protege de la radiación UV. A nivel del suelo, es un contaminante dañino.'},
+  'N+N':{f:'N2',n:'Nitrógeno molecular',t:'alótropo',fact:'El N₂ forma un triple enlace, uno de los enlaces más fuertes de la química, haciendo el gas inerte.'},
+  'F+F':{f:'F2',n:'Flúor molecular',t:'alótropo',fact:'El flúor es tan reactivo que puede hacer arder incluso el agua y el vidrio.'},
+  'Cl+Cl':{f:'Cl2',n:'Cloro molecular',t:'alótropo',fact:'El cloro gaseoso se usó como arma en la Primera Guerra Mundial. Hoy desinfecta nuestras piscinas y agua potable.'},
+  'Br+Br':{f:'Br2',n:'Bromo molecular',t:'alótropo',fact:'El bromo es uno de los dos únicos elementos líquidos a temperatura ambiente junto al mercurio.'},
+  'I+I':{f:'I2',n:'Yodo molecular',t:'alótropo',fact:'El yodo es vital para la glándula tiroides. Su deficiencia causa bocio.'},
+  'P+P':{f:'P4',n:'Fósforo blanco',t:'alótropo',fact:'El fósforo blanco brilla en la oscuridad y arde al contacto con el aire. Debe guardarse bajo agua.'},
+  'S+S':{f:'S8',n:'Azufre octaatómico',t:'alótropo',fact:'El azufre forma anillos de 8 átomos de forma natural, conocidos desde la antigüedad como "piedra de azufre".'},
+  
+  'H2+O':{f:'H2O',n:'Agua',t:'covalente',fact:'Cada molécula de agua forma enlaces de hidrógeno con sus vecinas, dándole propiedades únicas para la vida.'},
+  'H2+O2':{f:'H2O',n:'Agua',t:'covalente',fact:'El agua cubre el 71% de la superficie terrestre y es la única sustancia que existe naturalmente en los tres estados.'},
+  'C+O':{f:'CO',n:'Monóxido de carbono',t:'covalente',fact:'El CO es incoloro, inodoro y letal. Se produce en combustiones incompletas como las de estufas mal ventiladas.'},
+  'C+O2':{f:'CO2',n:'Dióxido de carbono',t:'covalente',fact:'El CO₂ es el gas que exhalamos y el que las plantas absorben. Es el principal gas de efecto invernadero.'},
+  'C+H2':{f:'CH4',n:'Metano',t:'covalente',fact:'El metano es el componente principal del gas natural. Las vacas producen grandes cantidades mediante eructos.'},
+  'H2+N':{f:'NH3',n:'Amoníaco',t:'covalente',fact:'El proceso Haber-Bosch para sintetizar amoníaco alimentó a la mitad de la humanidad mediante fertilizantes.'},
+  'H2+F':{f:'HF',n:'Ácido fluorhídrico',t:'covalente',fact:'El HF puede disolver vidrio, uno de los pocos ácidos capaces. Se usa para grabar cristal artístico.'},
+  'H2+F2':{f:'HF',n:'Ácido fluorhídrico',t:'covalente',fact:'Nunca debe guardarse en recipientes de vidrio, solo en plástico o teflón.'},
+  'H2+Cl':{f:'HCl',n:'Cloruro de hidrógeno',t:'covalente',fact:'Disuelto en agua forma ácido clorhídrico, el mismo que tu estómago usa para digerir alimentos.'},
+  'H2+Cl2':{f:'HCl',n:'Cloruro de hidrógeno',t:'covalente',fact:'El ácido clorhídrico del estómago tiene un pH entre 1 y 2, capaz de corroer metales.'},
+  'H2+Br':{f:'HBr',n:'Bromuro de hidrógeno',t:'covalente',fact:'Se usa en la síntesis de compuestos orgánicos bromados, muchos de los cuales son retardantes de llama.'},
+  'H2+I':{f:'HI',n:'Yoduro de hidrógeno',t:'covalente',fact:'Es uno de los ácidos fuertes más poderosos, capaz de reducir iones que otros ácidos no pueden.'},
+  'H2+S':{f:'H2S',n:'Sulfuro de hidrógeno',t:'covalente',fact:'Huele a huevos podridos y es altamente tóxico. Curiosamente, a bajas dosis adormece el sentido del olfato.'},
+  'O2+S':{f:'SO2',n:'Dióxido de azufre',t:'covalente',fact:'Principal causante de la lluvia ácida. También se usa como conservante en vinos (E220).'},
+  'N+O':{f:'NO',n:'Óxido nítrico',t:'covalente',fact:'Fue molécula del año en 1992. Es un neurotransmisor clave y el principio activo del Viagra.'},
+  'N+O2':{f:'NO2',n:'Dióxido de nitrógeno',t:'covalente',fact:'Gas pardo-rojizo y contaminante urbano. Responsable de la típica boina marrón sobre las ciudades.'},
+  'H2+P':{f:'PH3',n:'Fosfina',t:'covalente',fact:'Se detectó fosfina en la atmósfera de Venus en 2020, generando un gran debate sobre posible vida microbiana.'},
+  'O2+Si':{f:'SiO2',n:'Dióxido de silicio',t:'covalente',fact:'La sílice forma el cuarzo, la arena y el vidrio. Es el compuesto más abundante en la corteza terrestre.'},
+  
+  // Reacciones de encadenamiento
+  'CO2+H2O':{f:'H2CO3',n:'Ácido carbónico',t:'reacción',fact:'Se forma de forma natural cuando el CO₂ se disuelve en agua. Es el responsable de la acidez de los refrescos.'},
+  'NH3+H2O':{f:'NH4OH',n:'Hidróxido de amonio',t:'reacción',fact:'Base débil muy común en limpiadores de cristales y en la producción de fertilizantes.'},
+  'Na+H2O':{f:'NaOH',n:'Hidróxido de sodio',t:'reacción',fact:'Reacción violenta. El NaOH o sosa cáustica se usa para destupir tuberías y hacer jabón.'},
+  'K+H2O':{f:'KOH',n:'Hidróxido de potasio',t:'reacción',fact:'Reacción aún más violenta que la del sodio. El KOH se usa en jabones líquidos y como electrólito.'},
+  'Li+H2O':{f:'LiOH',n:'Hidróxido de litio',t:'reacción',fact:'El LiOH se usa en las naves espaciales para absorber dióxido de carbono exhalado por los astronautas.'},
+  'Ca+H2O':{f:'Ca(OH)2',n:'Hidróxido de calcio',t:'reacción',fact:'También llamado cal apagada, se usa en construcción para hacer mortero y encalar paredes.'},
+  'NaOH+HCl':{f:'NaCl',n:'Sal común',t:'reacción',fact:'La neutralización de un ácido fuerte con una base fuerte produce agua y sal de mesa.'},
+  'SO2+H2O':{f:'H2SO3',n:'Ácido sulfuroso',t:'reacción',fact:'Componente principal de la lluvia ácida, que destruye bosques y corroe estatuas de mármol.'},
+  'SO3+H2O':{f:'H2SO4',n:'Ácido sulfúrico',t:'reacción',fact:'El ácido sulfúrico es el producto químico más fabricado del mundo, vital para la industria.'},
+  'O2+S':{f:'SO3',n:'Trióxido de azufre',t:'covalente',fact:'Catalizador e intermediario clave para producir ácido sulfúrico a nivel industrial.'},
+  'CaO+H2O':{f:'Ca(OH)2',n:'Hidróxido de calcio',t:'reacción',fact:'La cal viva (CaO) se apaga con agua para producir cal apagada, desprendiendo mucho calor.'},
+  'CaO+CO2':{f:'CaCO3',n:'Carbonato de calcio',t:'reacción',fact:'Es el componente principal de la tiza, el mármol, las conchas marinas y el coral.'},
+  'Mg+HCl':{f:'MgCl2',n:'Cloruro de magnesio',t:'reacción',fact:'Sal altamente soluble usada para fabricar tofu (nigari) y como suplemento mineral.'},
+  'Fe+HCl':{f:'FeCl2',n:'Cloruro de hierro(II)',t:'reacción',fact:'Sal de hierro de color verde pálido, precursora de muchos compuestos de hierro.'},
+  'CH4+O2':{f:'CO2',n:'Combustión del metano',t:'reacción',fact:'La combustión del gas natural produce CO₂ y agua, liberando energía que calienta nuestros hogares.'}
+};
+
+// ============================================
+// ESTADO DE LA APLICACIÓN
+// ============================================
+let wsItems = [];
+let nextId = 1;
+const discovered = new Map();
+let customDragState = { active: false, id: null, formula: '', name: '', offX: 0, offY: 0 };
+
+// ============================================
+// MOTOR DE QUÍMICA Y LÓGICA
+// ============================================
+function formatFormula(f) { return f.replace(/([A-Za-z\))])(\d+)/g, '$1<sub>$2</sub>'); }
+function getKey(a, b) { return [a,b].sort().join('+'); }
+function gcd(a, b) { a=Math.abs(a); b=Math.abs(b); while(b){let t=b;b=a%b;a=t;} return a; }
+
+function processIonic(metal, nonmetal) {
+  const posOx = metal.ox.filter(x => x > 0);
+  const negOx = nonmetal.ox.filter(x => x < 0).map(x => Math.abs(x));
+  let best = null;
+  for (let p of posOx) {
+    for (let n of negOx) {
+      const g = gcd(p, n);
+      const subM = n / g;
+      const subN = p / g;
+      const sum = subM + subN;
+      if (!best || sum < best.sum) {
+        best = { p, n, subM, subN, sum };
+      }
+    }
+  }
+  if (!best) return null;
+  const f = `${metal.sym}${best.subM>1?best.subM:''}${nonmetal.sym}${best.subN>1?best.subN:''}`;
+  const anionName = ANION_NAMES[nonmetal.sym] || nonmetal.name.toLowerCase();
+  let name = '';
+  if (metal.stock && posOx.length > 1) {
+    name = `${metal.name}(${ROMAN[best.p]}) ${anionName}`;
+  } else {
+    name = `${metal.name} ${anionName}`;
+  }
+  return { f, n: name.charAt(0).toUpperCase() + name.slice(1) };
+}
+
+function resolveReaction(item1, item2) {
+  const k1 = getKey(item1.formula, item2.formula);
+  if (RECIPES[k1]) return RECIPES[k1];
+  const el1 = elBySym[item1.formula];
+  const el2 = elBySym[item2.formula];
+  if (el1?.family === 'noble' || el2?.family === 'noble') {
+    return { error: 'Los gases nobles son inertes y no forman compuestos.' };
+  }
+  if (el1 && el2) {
+    const m1 = METAL_FAMILIES.has(el1.family);
+    const m2 = METAL_FAMILIES.has(el2.family);
+    if (m1 && !m2) return processIonic(el1, el2);
+    if (!m1 && m2) return processIonic(el2, el1);
+    if (m1 && m2) return { error: 'La mezcla de metales forma aleaciones, no compuestos químicos definidos.' };
+  }
+  return { error: 'Esta combinación no produce una reacción viable.' };
+}
+
+// ============================================
+// INTERFAZ Y RENDERIZADO
+// ============================================
+const workspace = document.getElementById('workspace');
+const elemGrid = document.getElementById('elem-grid');
+const discPanel = document.getElementById('disc-panel');
+const wsHint = document.getElementById('ws-hint');
+
+function initUI() {
+  // Botones de familia
+  const filterDiv = document.getElementById('family-filter');
+  const allBtn = document.createElement('div');
+  allBtn.className = 'fam-btn active';
+  allBtn.textContent = 'Todos';
+  allBtn.style.borderColor = 'var(--accent)';
+  allBtn.style.background = 'rgba(0,255,136,0.1)';
+  allBtn.onclick = () => filterElements('all', allBtn);
+  filterDiv.appendChild(allBtn);
+
+  FAMILY_ORDER.forEach(fam => {
+    const btn = document.createElement('div');
+    btn.className = 'fam-btn';
+    btn.textContent = FAMILY_NAMES[fam];
+    btn.style.borderColor = FAMILY_COLORS[fam];
+    btn.onclick = () => filterElements(fam, btn);
+    filterDiv.appendChild(btn);
+  });
+
+  // Renderizar elementos del inventario
+  elements.forEach(el => {
+    const div = document.createElement('div');
+    div.className = 'elemento-quimico';
+    div.draggable = true;
+    div.dataset.simbolo = el.sym;
+    div.style.setProperty('--fc', FAMILY_COLORS[el.family]);
+    div.innerHTML = `
+      <span class="numero">${el.n}</span>
+      <span class="simbolo">${el.sym}</span>
+      <span class="nombre">${el.name}</span>
+    `;
+    // Evento nativo de arrastre desde el inventario
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({formula: el.sym, name: el.name}));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    elemGrid.appendChild(div);
+  });
+
+  // Lógica nativa de Drop en la mesa (complementa los atributos ondrop y ondragover del HTML)
+  workspace.addEventListener('drop', e => {
+    e.preventDefault();
+    try {
+      const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const wsRect = workspace.getBoundingClientRect();
+      const x = e.clientX - wsRect.left - 45;
+      const y = e.clientY - wsRect.top - 25;
+      addToWorkspace(payload.formula, payload.name, Math.max(0,x), Math.max(0,y));
+    } catch(err) {}
+  });
+
+  // Tabs
+  document.querySelectorAll('.sidebar-tabs button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.sidebar-tabs button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      elemGrid.style.display = btn.dataset.tab === 'elements' ? 'flex' : 'none';
+      discPanel.style.display = btn.dataset.tab === 'discovered' ? 'flex' : 'none';
+      document.getElementById('family-filter').style.display = btn.dataset.tab === 'elements' ? 'flex' : 'none';
+    };
+  });
+
+  document.getElementById('clear-btn').onclick = clearWorkspace;
+
+  // Eventos globales para el arrastre personalizado dentro de la mesa
+  document.addEventListener('mousemove', onCustomDrag);
+  document.addEventListener('mouseup', onCustomDragEnd);
+}
+
+function filterElements(fam, btn) {
+  document.querySelectorAll('.fam-btn').forEach(b => { b.classList.remove('active'); b.style.background = 'transparent'; });
+  btn.classList.add('active');
+  btn.style.background = fam==='all' ? 'rgba(0,255,136,0.1)' : `${FAMILY_COLORS[fam]}22`;
+  document.querySelectorAll('.elemento-quimico').forEach(el => {
+    const elData = elBySym[el.dataset.simbolo];
+    el.style.display = (fam === 'all' || elData.family === fam) ? 'flex' : 'none';
+  });
+}
+
+function updateDiscPanel() {
+  discPanel.innerHTML = '';
+  document.getElementById('disc-count').textContent = discovered.size;
+  if (discovered.size === 0) {
+    discPanel.innerHTML = '<div class="disc-empty"><i class="fa-solid fa-flask"></i><p>Aun no has descubierto compuestos</p></div>';
+    return;
+  }
+  discovered.forEach((data, f) => {
+    const div = document.createElement('div');
+    div.className = 'disc-card';
+    div.draggable = true; // Los compuestos también son arrastrables nativamente
+    div.innerHTML = `<div class="dc-form">${formatFormula(f)}</div><div class="dc-name">${data.n}</div>`;
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({formula: f, name: data.n}));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    discPanel.appendChild(div);
+  });
+}
+
+// ============================================
+// SISTEMA DE ARRASTRE DENTRO DE LA MESA (Custom para movimiento fluido)
+// ============================================
+function addToWorkspace(formula, name, x, y) {
+  const id = nextId++;
+  const isCompound = !elBySym[formula];
+  const itemData = { id, formula, name, isCompound };
+  wsItems.push(itemData);
+  
+  const div = document.createElement('div');
+  div.id = `ws-${id}`;
+  div.className = `ws-item ${isCompound ? 'compound-item' : ''} new-item`;
+  div.style.left = x + 'px';
+  div.style.top = y + 'px';
+  div.innerHTML = `<div class="ws-sym">${formatFormula(formula)}</div><div class="ws-name">${name}</div>`;
+  
+  // Iniciar arrastre personalizado dentro de la mesa
+  div.addEventListener('mousedown', e => {
+    e.preventDefault(); // Prevenir arrastre nativo del elemento dentro de la mesa
+    const rect = div.getBoundingClientRect();
+    customDragState = {
+      active: true,
+      id: id,
+      formula: formula,
+      name: name,
+      offX: e.clientX - rect.left,
+      offY: e.clientY - rect.top
+    };
+    div.classList.add('dragging');
+  });
+  
+  workspace.appendChild(div);
+  setTimeout(() => { if(div) div.classList.remove('new-item'); }, 500);
+  wsHint.style.opacity = '0';
+}
+
+function onCustomDrag(e) {
+  if (!customDragState.active) return;
+  const el = document.getElementById(`ws-${customDragState.id}`);
+  if (!el) return;
+  const wsRect = workspace.getBoundingClientRect();
+  let x = e.clientX - wsRect.left - customDragState.offX;
+  let y = e.clientY - wsRect.top - customDragState.offY;
+  x = Math.max(0, Math.min(wsRect.width - 90, x));
+  y = Math.max(0, Math.min(wsRect.height - 60, y));
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+}
+
+function onCustomDragEnd(e) {
+  if (!customDragState.active) return;
+  const el = document.getElementById(`ws-${customDragState.id}`);
+  if(el) el.classList.remove('dragging');
+  checkCollision(customDragState.id);
+  customDragState.active = false;
+}
+
+function clearWorkspace() {
+  wsItems = [];
+  workspace.querySelectorAll('.ws-item').forEach(el => el.remove());
+  wsHint.style.opacity = '1';
+}
+
+// ============================================
+// COLISIONES Y REACCIONES
+// ============================================
+function checkCollision(draggedId) {
+  const dragEl = document.getElementById(`ws-${draggedId}`);
+  if (!dragEl) return;
+  const dragRect = dragEl.getBoundingClientRect();
+  const dragCX = dragRect.left + dragRect.width / 2;
+  const dragCY = dragRect.top + dragRect.height / 2;
+  
+  let targetId = null;
+  let minDist = 80;
+  
+  wsItems.forEach(item => {
+    if (item.id === draggedId) return;
+    const tEl = document.getElementById(`ws-${item.id}`);
+    if (!tEl) return;
+    const tRect = tEl.getBoundingClientRect();
+    const tCX = tRect.left + tRect.width / 2;
+    const tCY = tRect.top + tRect.height / 2;
+    const dist = Math.hypot(dragCX - tCX, dragCY - tCY);
+    if (dist < minDist) {
+      minDist = dist;
+      targetId = item.id;
+    }
+  });
+  
+  if (targetId !== null) {
+    const item1 = wsItems.find(i => i.id === draggedId);
+    const item2 = wsItems.find(i => i.id === targetId);
+    executeReaction(item1, item2);
+  }
+}
+
+function executeReaction(item1, item2) {
+  const result = resolveReaction(item1, item2);
+  const el1 = document.getElementById(`ws-${item1.id}`);
+  const el2 = document.getElementById(`ws-${item2.id}`);
+  const r1 = el1.getBoundingClientRect();
+  const r2 = el2.getBoundingClientRect();
+  const wsRect = workspace.getBoundingClientRect();
+  const cx = ((r1.left + r2.left) / 2) - wsRect.left;
+  const cy = ((r1.top + r2.top) / 2) - wsRect.top;
+  
+  if (result.error) {
+    el1.classList.add('reacting'); el2.classList.add('reacting');
+    setTimeout(() => { if(el1) el1.classList.remove('reacting'); if(el2) el2.classList.remove('reacting'); }, 500);
+    showToast('error', '', result.error, '');
+  } else {
+    el1.remove(); el2.remove();
+    wsItems = wsItems.filter(i => i.id !== item1.id && i.id !== item2.id);
+    spawnParticles(cx, cy, '#ff8c00');
+    spawnParticles(cx, cy, '#00ff88');
+    addToWorkspace(result.f, result.n, cx - 45, cy - 25);
+    if (!discovered.has(result.f)) {
+      discovered.set(result.f, { n: result.n, t: result.t });
+      updateDiscPanel();
+      const badge = result.t === 'alótropo' ? 'Alótropo' : result.t === 'covalente' ? 'Enlace Covalente' : result.t === 'reacción' ? 'Reacción' : 'Enlace Iónico';
+      showToast('success', result.f, result.n, result.fact, badge);
+    }
+  }
+}
+
+// ============================================
+// EFECTOS VISUALES Y NOTIFICACIONES
+// ============================================
+function spawnParticles(x, y, color) {
+  for (let i = 0; i < 12; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    p.style.backgroundColor = color;
+    p.style.boxShadow = `0 0 6px ${color}`;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * 60 + 20;
+    p.style.setProperty('--dx', `${Math.cos(angle)*dist}px`);
+    p.style.setProperty('--dy', `${Math.sin(angle)*dist}px`);
+    workspace.appendChild(p);
+    void p.offsetWidth;
+    p.classList.add('animate');
+    setTimeout(() => p.remove(), 700);
+  }
+}
+
+function showToast(type, formula, name, fact, badge='') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type === 'error' ? 'no-react-toast' : ''}`;
+  if (type === 'error') {
+    toast.innerHTML = `
+      <div class="toast-header">
+        <div class="toast-icon"><i class="fa-solid fa-xmark"></i></div>
+        <span class="toast-badge">Sin reacción</span>
+      </div>
+      <div class="toast-name">${name}</div>
+    `;
+  } else {
+    toast.innerHTML = `
+      <div class="toast-header">
+        <div class="toast-icon"><i class="fa-solid fa-atom"></i></div>
+        <span class="toast-badge">${badge}</span>
+      </div>
+      <div class="toast-formula">${formatFormula(formula)}</div>
+      <div class="toast-name">${name}</div>
+      <div class="toast-fact">"${fact}"</div>
+    `;
+  }
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('removing');
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
+}
+
+// ============================================
+// INICIO
+// ============================================
+initUI();
+</script>
+</body>
+</html>
